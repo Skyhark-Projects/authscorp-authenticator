@@ -5,6 +5,7 @@ import { Camera } from 'expo-camera';
 import { BarCodeScanner } from 'expo-barcode-scanner'
 import { parse as querystring } from 'querystring'
 import storage from './storage'
+import { decode } from 'url-encode-decode'
 
 export default class ScannerView extends Component {
     constructor(e) {
@@ -34,11 +35,28 @@ export default class ScannerView extends Component {
         if(!query.secret || !ScannerView.isBase32(query.secret.toUpperCase()))
             return
 
-        storage.add({
-            name: name,
+        const item = {
+            name: decode(name),
             authenticator: query.secret,
-            // subname ?         
-        }).then(() => {
+        }
+
+        if(query.issuer)
+            item.issuer = query.issuer
+
+        if(query.algorithm && query.algorithm.toLowerCase() !== 'sha1') {
+            // ToDo support SHA256 and SHA512
+        }
+
+        if(query.issuer && !isNaN(parseInt(query.digits)) && parseInt(query.digits) > 0 && parseInt(query.digits) != 6 && parseInt(query.digits) < 12)
+            item.digits = parseInt(query.digits)
+
+        if(query.period && !isNaN(parseInt(query.period)) && parseInt(query.period) > 0 && parseInt(query.period) != 30)
+            item.period = parseInt(query.period)
+
+        // todo support:
+        // count
+
+        storage.add(item).then(() => {
             this.props.navigation.goBack()
         })
     }

@@ -1,16 +1,18 @@
 import React, { Component } from 'react'
-import { StyleSheet, View, FlatList, Clipboard } from 'react-native';
-import { Header, Text } from 'react-native-elements';
+import { StyleSheet, View, FlatList, Clipboard, TouchableOpacity, Animated } from 'react-native';
+import { Header, Text, Icon } from 'react-native-elements';
 import { CircularProgress } from 'react-native-circular-progress';
 import Toast from 'react-native-easy-toast'
 import Ripple from 'react-native-material-ripple'
 import hmac from './hmac.js'
 import storage from './storage.js'
+import { SwipeListView } from 'react-native-swipe-list-view'
 
 // ------------------
 
 // ToDo rename list item
 // ToDo remove from list
+//    -> show modal requiring to rewirte singel word to confirm removing item
 // ToDo import secret directly
 // ToDo backup to icloud / authscorp
 
@@ -22,6 +24,11 @@ export default class CodesView extends Component {
     this.state = {
       progress: 0
     }
+
+    this.rowSwipeAnimatedValues = {};
+    Array(20).fill('').forEach((_, i) => {
+      this.rowSwipeAnimatedValues[`${i}`] = new Animated.Value(0);
+    });
   }
 
   componentDidMount() {
@@ -42,8 +49,12 @@ export default class CodesView extends Component {
       return item.code
 
     item.lastTime = currenTime
-    if(!item.secret)
-      item.secret = new hmac(item.authenticator, true)
+    if(!item.secret) {
+      item.secret = new hmac(item.authenticator, true, {
+        digits: item.digits || 6,
+        period: item.period || 30,
+      })
+    }
 
     item.code = item.secret.authenticator(currenTime)
     return item.code
@@ -63,8 +74,9 @@ export default class CodesView extends Component {
     }
 
     var code = this.getCode(item)
-    return (<Ripple rippleColor="#0034b2" onPress={() => this.onCopy(code)}>
+    return (<Ripple rippleColor="#0034b2" onPress={() => this.onCopy(code)} style={{ backgroundColor: '#fff' }}>
         <View style={styles.card}>
+            { item.issuer ? (<Text style={{marginBottom: 5}}>{item.issuer}</Text>) : null }
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text h2 style={{paddingBottom: 5, color }}>{code}</Text>
                 <View style={{marginTop: 15}}>
@@ -74,6 +86,18 @@ export default class CodesView extends Component {
             <Text>{item.name}</Text>
         </View>
     </Ripple>)
+  }
+
+  renderHiddenItem(data, rowMap) {
+    return (<View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{flex: 1}} />
+      <TouchableOpacity style={{ backgroundColor: '#424242', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }}>
+        <Icon name="edit" color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity style={{ backgroundColor: '#c62828', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }}>
+        <Icon name="delete" color="#fff" />
+      </TouchableOpacity>
+    </View>)
   }
 
   render() {
@@ -89,10 +113,15 @@ export default class CodesView extends Component {
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 10 }}>
                   <Text h4 style={{textAlign: 'center'}}>Scan a new authenticator code to get started</Text>
                 </View>
-              ) : (<FlatList
+              ) : (<SwipeListView
+                rightOpenValue={-180}
+                previewRowKey={'0'}
+                disableRightSwipe={true}
+                previewOpenDelay={3000}
                 keyExtractor={(item) => item.authenticator}
                 data={storage.items}
                 renderItem={this.renderItem}
+                renderHiddenItem={this.renderHiddenItem.bind(this)}
               />)
             }
             <Toast ref="toast" />

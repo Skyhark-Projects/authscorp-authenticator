@@ -1,17 +1,22 @@
 // Create hmac hasher
 const Buffer = global.Buffer = require('buffer').Buffer
-// const Base32 = require('base32-decode')
 const Base32 = require('thirty-two')
 const sha1   = (data, data2) => sha1Creator.create().update(Buffer.concat([data, data2]))
 
 class Hmac {
-  constructor(salt, base32) {
-    if(base32) {
+  constructor(salt, base32, config) {
+    if(base32)
       salt = Base32.decode(salt.replace(/\W+/g, '').toUpperCase())
-    }
+
+    this.digits = 6
+    this.period = 30
+    for(var n in config)
+      this[n] = config[n]
 
     var blocksize = 64
     salt = !Buffer.isBuffer(salt) ? Buffer.from(salt) : salt
+    if(salt.length > blocksize)
+      salt = sha1Creator.create().update(salt).digest()
 
     this._ipad = Buffer.alloc(blocksize)
     this._opad = Buffer.alloc(blocksize)
@@ -23,13 +28,13 @@ class Hmac {
   }
 
   sha1(data) {
-      const h = sha1(this._ipad, Buffer.isBuffer(data) ? data : Buffer.from(data)).digest()
-      return sha1(this._opad, h).hex()
+    const h = sha1(this._ipad, Buffer.isBuffer(data) ? data : Buffer.from(data)).digest()
+    return sha1(this._opad, h).hex()
   }
 
   authenticator(time = null) {
     if(time === null)
-      time = Math.floor(Date.now() / 30000)
+      time = Math.floor(Date.now() / (this.period * 1000))
 
     const hex = this.sha1(Buffer.from(intToBytes(time)))
 
@@ -49,7 +54,8 @@ class Hmac {
     v = (v % 1000000) + '';
 
     var code = Array(7-v.length).join('0') + v;
-    return code.substr(0,3)+' '+code.substr(3)
+    var n = Math.floor(this.digits / 2)
+    return code.substr(0, n)+' '+code.substr(n)
   }
 }
 
