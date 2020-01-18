@@ -36,8 +36,8 @@ export default class ScannerView extends Component {
             return
 
         const item = {
-            name: decode(name),
-            authenticator: query.secret,
+            name:   decode(name),
+            secret: query.secret,
         }
 
         if(query.issuer)

@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
-import { StyleSheet, View, FlatList, Clipboard, TouchableOpacity, Animated } from 'react-native';
-import { Header, Text, Icon } from 'react-native-elements';
+import { StyleSheet, View, Clipboard, TouchableOpacity, Animated } from 'react-native';
+import { Header, Text, Icon, Overlay, Button, Input } from 'react-native-elements';
 import { CircularProgress } from 'react-native-circular-progress';
 import Toast from 'react-native-easy-toast'
 import Ripple from 'react-native-material-ripple'
@@ -10,9 +10,6 @@ import { SwipeListView } from 'react-native-swipe-list-view'
 
 // ------------------
 
-// ToDo rename list item
-// ToDo remove from list
-//    -> show modal requiring to rewirte singel word to confirm removing item
 // ToDo import secret directly
 // ToDo backup to icloud / authscorp
 
@@ -36,6 +33,9 @@ export default class CodesView extends Component {
       this.setState({
         progress: (Date.now() % (30 * 1000)) / (300)
       })
+
+      if(this.state.edit && this.editInput && this.editInput.current && !this.editInput.current.isFocused())
+        this.editInput.current.focus()
     }, 100);
   }
 
@@ -49,14 +49,14 @@ export default class CodesView extends Component {
       return item.code
 
     item.lastTime = currenTime
-    if(!item.secret) {
-      item.secret = new hmac(item.authenticator, true, {
+    if(!item.secretObj) {
+      item.secretObj = new hmac(item.secret, true, {
         digits: item.digits || 6,
         period: item.period || 30,
       })
     }
 
-    item.code = item.secret.authenticator(currenTime)
+    item.code = item.secretObj.authenticator(currenTime)
     return item.code
   }
 
@@ -89,15 +89,54 @@ export default class CodesView extends Component {
   }
 
   renderHiddenItem(data, rowMap) {
+    const close = () => rowMap[data.item.secret].closeRow()
+
     return (<View style={{ flex: 1, flexDirection: 'row' }}>
       <View style={{flex: 1}} />
-      <TouchableOpacity style={{ backgroundColor: '#424242', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }}>
+      <TouchableOpacity style={{ backgroundColor: '#424242', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }} onPress={() => { close(); this.editValue = null; this.setState({ edit: data.item })}}>
         <Icon name="edit" color="#fff" />
       </TouchableOpacity>
-      <TouchableOpacity style={{ backgroundColor: '#c62828', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }}>
+      <TouchableOpacity style={{ backgroundColor: '#c62828', width: 90, padding: 15, justifyContent: 'center', alignItems: 'center' }} onPress={() => { close(); this.setState({ delete: data.item }) }}>
         <Icon name="delete" color="#fff" />
       </TouchableOpacity>
     </View>)
+  }
+
+  renderDeleteModal() {
+    return (
+      <Overlay isVisible={true} height={"auto"} onBackdropPress={() => this.setState({ delete: false })}>
+        <View>
+          <Text style={{ margin: 5, fontSize: 20 }}>You're about to delete an authentifacation token</Text>
+          <Text style={{ margin: 5, fontSize: 16 }}>This action can not be reverted</Text>
+          <Text style={{ margin: 5, fontSize: 20 }}>{this.state.delete.name}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 25 }}>
+            <Button title="Cancel" buttonStyle={{ backgroundColor: '#212121', paddingTop: 10, paddingBottom: 10, paddingLeft: 20, paddingRight: 20 }} onPress={() => this.setState({ delete: false })} />
+            <Button title="Delete" buttonStyle={{ backgroundColor: '#c62828', paddingTop: 10, paddingBottom: 10, paddingLeft: 20, paddingRight: 20 }} onPress={() => storage.remove(this.state.delete).then(() => this.setState({ delete: false })) } />
+          </View>
+        </View>
+      </Overlay>
+    )
+  }
+
+  renderEditModal() {
+    if(!this.editInput)
+      this.editInput = React.createRef()
+
+    return (
+      <Overlay isVisible={true} height={"auto"} onBackdropPress={() => this.setState({ edit: false })}>
+        <View>
+          <Text style={{ margin: 5, fontSize: 20 }}>Change authenticator name</Text>
+          <Input placeholder={"test"} label={this.state.edit.name} ref={this.editInput} onChangeText={(txt) => this.editValue = txt} />
+          <Button title="Confirm" buttonStyle={{ backgroundColor: '#212121', marginTop: 15, paddingTop: 10, paddingBottom: 10, paddingLeft: 20, paddingRight: 20 }} onPress={() => {
+            if(!this.editValue)
+              return this.setState({ edit: false })
+
+            this.state.edit.name = this.editValue
+            storage.update(this.state.edit).then(() => this.setState({ edit: false }))
+          }} />
+        </View>
+      </Overlay>
+    )
   }
 
   render() {
@@ -118,12 +157,13 @@ export default class CodesView extends Component {
                 previewRowKey={'0'}
                 disableRightSwipe={true}
                 previewOpenDelay={3000}
-                keyExtractor={(item) => item.authenticator}
+                keyExtractor={(item) => item.secret}
                 data={storage.items}
                 renderItem={this.renderItem}
                 renderHiddenItem={this.renderHiddenItem.bind(this)}
               />)
             }
+            { this.state.edit ? this.renderEditModal() : (this.state.delete ? this.renderDeleteModal() : null) }
             <Toast ref="toast" />
         </View>
       )
